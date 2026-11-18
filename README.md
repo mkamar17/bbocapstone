@@ -61,3 +61,38 @@ I now treat GP predictions as evidence rather than instructions. I am starting t
 I therefore don't apply the same strategy to every function. Where I have repeatedly found strong results, I focus more on local exploitation. For less understood functions, I deliberately explore or design queries to test patterns I have noticed.
 
 Ultimately, I treat every query as both an opportunity to improve my score and an experiment that teaches me something new about the hidden function.
+
+<ins> 5. Updated strategy development </ins>
+
+My optimisation strategy has evolved throughout the BBO challenge as more observations have become available. Rather than applying the same method to all eight functions, I use a function-specific approach based on previous results, model validation and the behaviour observed in each search space.
+
+Gaussian Processes remain my main surrogate model, but I treat their predictions and uncertainty as evidence rather than instructions. Depending on the function, I have combined GP modelling with acquisition functions such as UCB, EI and PI, sensitivity analysis, controlled local refinement and manual exploration.
+
+I have also experimented with neural network classification and regression using TensorFlow. These models are only considered for query selection when their validation performance provides evidence that they add value over simpler approaches.
+
+A separate optimisation journal records how this strategy has developed across each round, including:
+- submitted queries
+- reasoning behind each query
+- predicted outputs where applicable
+- actual returned results
+- prediction gain/loss
+- evaluation of the strategy
+- decisions for the following round
+
+[View my full BBO optimisation journal](https://docs.google.com/spreadsheets/d/1eA75HP5KTTgQZAAiwdnpb1mCnqJXC4tdzsE3-yhwvhY/edit?usp=sharing)
+
+<ins> 6. Repository structure </ins>
+
+The `/stage-two` directory is organised so that each BBO round has its own analysis notebook. This preserves the analysis and decisions made at each stage of the optimisation process and makes it easier to follow how the strategy develops over time.
+
+`query_history.py` acts as the central record of submitted queries and returned outputs. Each new round loads the initial observations together with this accumulated query history.
+
+Reusable functionality has been moved into `bbo_utils.py`, including data loading, Gaussian Process fitting and validation, acquisition functions, result checking, visualisation and query formatting. This keeps the individual round notebooks focused on analysis and query decisions rather than repeating implementation code.
+
+The main modelling and analysis libraries used are:
+
+- NumPy and pandas for data handling
+- Matplotlib for visualisation
+- SciPy for acquisition calculations
+- scikit-learn for Gaussian Processes, kernel evaluation and model validation
+- TensorFlow for experimental neural network models
