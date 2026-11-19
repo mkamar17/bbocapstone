@@ -9,6 +9,10 @@ from sklearn.gaussian_process.kernels import RBF, Matern, RationalQuadratic
 from sklearn.model_selection import LeaveOneOut, cross_val_score
 from sklearn.metrics import mean_absolute_error
 from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import QuantileTransformer
+
+from sklearn.exceptions import ConvergenceWarning
+import warnings
 
 from query_history import query_history
 
@@ -52,49 +56,118 @@ def plot_scores(i, functions):
     plt.grid(alpha=0.3)
     plt.show()
 
+# ============================================================
+# VISUALISATION
+# ============================================================
+
+def plot_2d(i, functions, y=None):
+    X = functions[i]["X"]
+    y = functions[i]["y"] if y is None else y
+
+    plt.scatter(X[:, 0], X[:, 1], c=y, cmap="viridis", s=80)
+    plt.colorbar(label="Output")
+
+    # Last round's query
+    plt.scatter(
+        X[-1, 0], X[-1, 1],
+        marker="*", s=250,
+        edgecolors="red",
+        facecolors="none",
+        linewidths=2,
+        label="Last query"
+    )
+
+    plt.xlabel("x1")
+    plt.ylabel("x2")
+    plt.title(f"Function {i}")
+    plt.legend()
+    plt.show()
+
+def scale_scores(y):
+    qt = QuantileTransformer(
+        n_quantiles=len(y),
+        output_distribution="uniform"
+    )
+
+    return qt.fit_transform(y.reshape(-1, 1)).ravel()
+
+def plot_3d(i, functions, y=None):
+    X = functions[i]["X"]
+    y = functions[i]["y"] if y is None else y
+
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection="3d")
+
+    scatter = ax.scatter(
+        X[:, 0],
+        X[:, 1],
+        X[:, 2],
+        c=y,
+        cmap="viridis",
+        s=80
+    )
+
+    fig.colorbar(scatter, ax=ax, label="Output", shrink=0.7)
+
+    # Last round's query
+    ax.scatter(
+        X[-1, 0],
+        X[-1, 1],
+        X[-1, 2],
+        marker="*",
+        s=300,
+        edgecolors="red",
+        facecolors="none",
+        linewidths=2,
+        label="Last query"
+    )
+
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    ax.set_zlabel("x3")
+    ax.set_title(f"Function {i}")
+    ax.legend()
+
+    plt.show()
 
 # ============================================================
 # GP KERNEL VALIDATION
 # ============================================================
-
 def validate_kernels(i, functions):
     X = functions[i]["X"]
     y = functions[i]["y"]
 
-    kernels = {
-        "RBF 0.1": RBF(length_scale=0.1),
-        "RBF 0.5": RBF(length_scale=0.5),
-        "Matern 0.1": Matern(length_scale=0.1),
-        "Matern 0.5": Matern(length_scale=0.5),
-        "RQ 0.1": RationalQuadratic(length_scale=0.1),
-        "RQ 0.5": RationalQuadratic(length_scale=0.5),
-    }
-
-    loo = LeaveOneOut()
+    length_scales = [0.05, 0.1, 0.2, 0.5]
     results = {}
 
-    for name, kernel in kernels.items():
-        predictions = []
-        actual = []
+    for ls in length_scales:
+        kernels = {
+            "RBF": RBF(ls),
+            "Matern": Matern(ls, nu=2.5),
+            "RQ": RationalQuadratic(
+                length_scale=ls,
+                alpha=1.0
+            )
+        }
 
-        for train_idx, test_idx in loo.split(X):
+        for name, kernel in kernels.items():
             gp = GaussianProcessRegressor(
                 kernel=kernel,
                 normalize_y=True,
-                random_state=42
+                optimizer=None
             )
 
-            gp.fit(X[train_idx], y[train_idx])
+            mae = -cross_val_score(
+                gp,
+                X,
+                y,
+                cv=LeaveOneOut(),
+                scoring="neg_mean_absolute_error"
+            ).mean()
 
-            pred = gp.predict(X[test_idx])[0]
+            results[(name, ls)] = mae
 
-            predictions.append(pred)
-            actual.append(y[test_idx][0])
-
-        mae = mean_absolute_error(actual, predictions)
-        results[name] = mae
-
-    return dict(sorted(results.items(), key=lambda x: x[1]))
+    return sorted(results.items(), key=lambda x: x[1])
 
 
 # ============================================================
@@ -108,13 +181,45 @@ def fit_gp(i, functions, kernel):
     gp = GaussianProcessRegressor(
         kernel=kernel,
         normalize_y=True,
-        random_state=42
+        optimizer=None
     )
 
     gp.fit(X, y)
 
     return gp
 
+def check_uncertainty(gp, suggestions):
+    for name, point in suggestions.items():
+        mean, std = gp.predict(point.reshape(1, -1), return_std=True)
+
+        print(
+            f"{name}: mean={mean[0]:.4f}, "
+            f"uncertainty={std[0]:.4f}"
+        )
+
+def plot_input_sensitivity(gp, best_x, n_points=100):
+    values = np.linspace(0, 1, n_points)
+
+    for j in range(len(best_x)):
+        X_test = np.tile(best_x, (n_points, 1))
+        X_test[:, j] = values
+
+        mean, std = gp.predict(X_test, return_std=True)
+
+        plt.figure(figsize=(7, 4))
+        plt.plot(values, mean)
+        plt.fill_between(
+            values,
+            mean - std,
+            mean + std,
+            alpha=0.2
+        )
+
+        plt.axvline(best_x[j], linestyle="--")
+        plt.xlabel(f"x{j + 1}")
+        plt.ylabel("GP predicted output")
+        plt.title(f"Input sensitivity to x{j + 1}")
+        plt.show()
 
 # ============================================================
 # ACQUISITION FUNCTIONS
