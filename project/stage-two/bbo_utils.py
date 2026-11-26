@@ -6,8 +6,8 @@ from scipy.stats import norm
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, Matern, RationalQuadratic
-from sklearn.model_selection import LeaveOneOut, cross_val_score
-from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import LeaveOneOut, cross_val_score, cross_val_predict
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import QuantileTransformer
 
